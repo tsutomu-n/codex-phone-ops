@@ -6,7 +6,15 @@ $errors=$null; $tokens=$null
 if ($errors.Count) { throw ($errors | Out-String) }
 $data=@{requestId='isolated-smoke';user=[Security.Principal.WindowsIdentity]::GetCurrent().Name;sid='';appId='';certificate=$false}
 $payload=@{code=[IO.File]::ReadAllText((Resolve-Path $path));data=$data}|ConvertTo-Json -Depth 5 -Compress
-$boot='$ErrorActionPreference="Stop";[Console]::InputEncoding=New-Object System.Text.UTF8Encoding($false);$r=[Console]::In.ReadToEnd()|ConvertFrom-Json;& ([ScriptBlock]::Create($r.code)) $r.data'
+$boot=@'
+$ErrorActionPreference='Stop'
+[Console]::InputEncoding=New-Object System.Text.UTF8Encoding($false)
+$raw=[Console]::In.ReadToEnd()
+$prefix=($raw.ToCharArray()|Select-Object -First 8|ForEach-Object {[int]$_}) -join ','
+[Console]::Error.WriteLine("stdin length=$($raw.Length) prefix=$prefix")
+$r=$raw|ConvertFrom-Json
+& ([ScriptBlock]::Create($r.code)) $r.data
+'@
 $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
 $null=$payload | ConvertFrom-Json
 $start=New-Object Diagnostics.ProcessStartInfo
