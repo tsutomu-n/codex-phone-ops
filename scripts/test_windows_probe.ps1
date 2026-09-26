@@ -8,9 +8,7 @@ $data=@{requestId='isolated-smoke';user=[Security.Principal.WindowsIdentity]::Ge
 $payload=@{code=[IO.File]::ReadAllText((Resolve-Path $path));data=$data}|ConvertTo-Json -Depth 5 -Compress
 $boot='$ErrorActionPreference="Stop";[Console]::InputEncoding=New-Object System.Text.UTF8Encoding($false);$r=[Console]::In.ReadToEnd()|ConvertFrom-Json;& ([ScriptBlock]::Create($r.code)) $r.data'
 $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
-# ASCII escaped JSON preserves the stdin contract under Windows PowerShell 5.1.
-$ascii=-join ($payload.ToCharArray()|ForEach-Object {if([int]$_ -gt 127){'\u{0:x4}' -f [int]$_}else{[string]$_}})
-$null=$ascii | ConvertFrom-Json
+$null=$payload | ConvertFrom-Json
 $start=New-Object Diagnostics.ProcessStartInfo
 $start.FileName='powershell.exe'
 $start.Arguments='-NoLogo -NoProfile -NonInteractive -EncodedCommand '+$encoded
@@ -22,12 +20,13 @@ $child=New-Object Diagnostics.Process
 $child.StartInfo=$start
 if(-not $child.Start()){throw 'collector did not start'}
 try {
- $child.StandardInput.Write($ascii)
+ $bytes=[Text.Encoding]::UTF8.GetBytes($payload)
+ $child.StandardInput.BaseStream.Write($bytes,0,$bytes.Length)
  $child.StandardInput.Close()
  $out=$child.StandardOutput.ReadToEnd()
- $null=$child.StandardError.ReadToEnd()
+ $err=$child.StandardError.ReadToEnd()
  $child.WaitForExit()
- if($child.ExitCode -ne 0){throw 'collector failed'}
+ if($child.ExitCode -ne 0){throw "collector failed: $($err.Substring(0,[Math]::Min(2000,$err.Length)))"}
 } finally { $child.Dispose() }
 $o=$out|ConvertFrom-Json
 if($o.schemaVersion -ne 1 -or $o.requestId -ne 'isolated-smoke' -or $o.identity.status -ne 'observed'){throw 'contract failed'}
