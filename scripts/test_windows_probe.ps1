@@ -10,8 +10,25 @@ $boot='$ErrorActionPreference="Stop";[Console]::InputEncoding=New-Object System.
 $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
 # ASCII escaped JSON preserves the stdin contract under Windows PowerShell 5.1.
 $ascii=-join ($payload.ToCharArray()|ForEach-Object {if([int]$_ -gt 127){'\u{0:x4}' -f [int]$_}else{[string]$_}})
-$out=$ascii | powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $encoded
-if($LASTEXITCODE -ne 0){throw 'collector failed'}
+$null=$ascii | ConvertFrom-Json
+$start=New-Object Diagnostics.ProcessStartInfo
+$start.FileName='powershell.exe'
+$start.Arguments='-NoLogo -NoProfile -NonInteractive -EncodedCommand '+$encoded
+$start.UseShellExecute=$false
+$start.RedirectStandardInput=$true
+$start.RedirectStandardOutput=$true
+$start.RedirectStandardError=$true
+$child=New-Object Diagnostics.Process
+$child.StartInfo=$start
+if(-not $child.Start()){throw 'collector did not start'}
+try {
+ $child.StandardInput.Write($ascii)
+ $child.StandardInput.Close()
+ $out=$child.StandardOutput.ReadToEnd()
+ $null=$child.StandardError.ReadToEnd()
+ $child.WaitForExit()
+ if($child.ExitCode -ne 0){throw 'collector failed'}
+} finally { $child.Dispose() }
 $o=$out|ConvertFrom-Json
 if($o.schemaVersion -ne 1 -or $o.requestId -ne 'isolated-smoke' -or $o.identity.status -ne 'observed'){throw 'contract failed'}
 foreach($name in @('sessions','app','rdp','machine','candidates','certificate','tailscale')){if(-not $o.$name.status){throw "missing $name"}}
