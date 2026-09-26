@@ -5,7 +5,7 @@ for Codex CLI and ChatGPT Remote workflows.
 
 Unofficial project. Not affiliated with or endorsed by OpenAI.
 
-Android / Termuxから、UbuntuのCodex CLI操作とWindows 11のChatGPT Remote復旧へ戻るための個人向けツールです。SSH接続、純正CLIへの移動、RDPでの手動復旧手順を一つの入口にまとめ、スマートフォンで「次に何を確認するか」を迷わないために作りました。
+Android / TermuxからUbuntuのCodex CLIを操作し、Windows 11のChatGPT Remoteへ戻るための個人向けツールです。SSH接続、純正CLIへの移動、RDPによる手動復旧の手順を一つの入口にまとめています。スマートフォンで次に確認することが分かるように作りました。
 
 製品名はCodex PhoneOps、コマンド名はその頭文字の `cpo` です。
 
@@ -17,7 +17,7 @@ Android / Termuxから、UbuntuのCodex CLI操作とWindows 11のChatGPT Remote�
 
 ## 現在の状態
 
-バージョンは **0.2.0・正式Release前の配布候補**です。Linuxのローカル試験・静的ビルドが対象で、Android実機、Windows実機、実ChatGPT Remoteの受入は未完了です。GitHub Actionsは定義済みですが、ローカル検証とGitHub上の実行成功は別です。
+バージョンは **0.2.0・正式Release前の配布候補**です。Linuxでのローカル試験と静的ビルドが対象です。Android実機、Windows実機、実ChatGPT Remoteの受入は完了していません。GitHub Actionsは定義済みですが、ローカル検証とGitHub上の実行成功は別です。
 
 Repository / Go module: `github.com/tsutomu-n/codex-phone-ops`
 
@@ -27,16 +27,16 @@ Repository / Go module: `github.com/tsutomu-n/codex-phone-ops`
 
 ## Installation — 導入
 
-現在はソースから配布候補を作成します。公開済みreleaseやダウンロードURLはまだありません。ビルドにはGo 1.23以上、Ubuntu連携には接続先のCodex CLI 0.155以上が必要です。
+現在はソースから配布候補を作成します。公開済みreleaseとダウンロードURLはまだありません。ビルドにはGo 1.23以上が必要です。Ubuntu連携には、接続先にCodex CLI 0.155以上が必要です。
 
 ```bash
 # cloneしたrepositoryのrootで実行
 bash scripts/package.sh
 ```
 
-生成物は `dist/release/codex-phone-ops-0.2.0-linux.tar.gz` と `dist/release/codex-phone-ops-0.2.0-source.tar.gz`、検証用の `SHA256SUMS.txt` です。Git管理ファイルの現在の内容からsourceを組み、そのsourceでbinaryをbuildします。配布フォルダーに別のファイルがあればpackageは停止します。前者はLinux arm64 / amd64を同梱したTermux向け候補で、Android実機動作の保証ではありません。配布前に、信頼できる経路で得たchecksumと照合してください。
+生成物は `dist/release/codex-phone-ops-0.2.0-linux.tar.gz` と `dist/release/codex-phone-ops-0.2.0-source.tar.gz`、検証用の `SHA256SUMS.txt` です。Git管理ファイルの現在の内容からsource archiveを作り、そのsourceからbinaryをbuildします。配布フォルダーに別のファイルがあればpackageは停止します。Linux用archiveにはarm64 / amd64のbinaryを同梱します。Termux向けの候補であり、Android実機での動作を保証するものではありません。配布前に、信頼できる経路で得たchecksumと照合してください。
 
-Termuxに既存のbash・OpenSSH・tar・sha256sumが必要です。配布候補を検証・展開し、その中で以下を実行します。installerはネットワークを使わず、配置先を表示して確認します。
+Termuxには、既存のbash・OpenSSH・tar・sha256sumが必要です。配布候補を検証・展開した後、展開先で以下を実行します。installerはネットワークを使わず、配置先を表示して確認を求めます。
 
 ```bash
 bash install.sh
@@ -44,7 +44,7 @@ bash install.sh
 "$HOME/.local/bin/cpo" card
 ```
 
-`$HOME/.local/bin` がPATHに入っていれば `cpo` で起動できます。Termux:Widgetは「Codex PhoneOps」を作成します。REFRESH後に利用してください。初回登録は接続先を確認して `cpo ubuntu setup` または `cpo win11 setup` を実行します。Windows登録では復旧したい作業名も指定します。setupには対象へのSSH診断が伴います。
+`$HOME/.local/bin` がPATHに入っていれば `cpo` で起動できます。installerはTermux:Widget用の「Codex PhoneOps」を作成します。REFRESH後に利用してください。初回登録では接続先を確認し、`cpo ubuntu setup` または `cpo win11 setup` を実行します。Windows登録では復旧したい作業名も指定します。setupでは対象へのSSH診断を行います。
 
 旧版の管理下にある `phoneops` launcherは、installerがbackup後に取り外します。`phoneops` の互換コマンドは提供しません。設定と操作記録の保存先は変わりません。
 
@@ -114,4 +114,4 @@ PTY試験はfixture Codex、Windows画面試験はfake SSHを使います。実�
 
 ## Roadmap — 今後の確認
 
-未実施の受入として、Android / Termux / Widget実機、隔離WindowsでのPowerShell / OpenSSH、本人によるRemote復帰とRDP切断後の再接続確認を予定しています。公開配布の判断はこれらと公開内容の確認後です。自動修復やRemote代替クライアントは実装済み機能に含まれません。
+未実施の受入として、Android / Termux / Widget実機、隔離WindowsでのPowerShell / OpenSSH、本人によるRemote復帰とRDP切断後の再接続確認を予定しています。公開配布は、これらの受入と公開内容を確認してから判断します。自動修復とRemote代替クライアントは実装済み機能に含まれません。
