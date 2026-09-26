@@ -16,23 +16,23 @@ test ! -e "$HOME/.local/share/codex-phone-ops/deliveries/codex-phone-ops-0.2.0-l
   tar -xzf codex-phone-ops-0.2.0-linux.tar.gz -C "$HOME/.local/share/codex-phone-ops/deliveries"
 cd "$HOME/.local/share/codex-phone-ops/deliveries/codex-phone-ops-0.2.0-linux"
 bash install.sh
-"$HOME/.local/bin/phoneops" version
-"$HOME/.local/bin/phoneops" card
-"$HOME/.local/bin/phoneops" win11 setup
-"$HOME/.local/bin/phoneops" win11
+"$HOME/.local/bin/cpo" version
+"$HOME/.local/bin/cpo" card
+"$HOME/.local/bin/cpo" win11 setup
+"$HOME/.local/bin/cpo" win11
 ```
 
 同じ展開先が既にある場合は上書きせず、既存内容を確認してください。installerは個人領域に一時コピーしてhash・versionを確認し、実行不能なら入口を切り替えません。共有Downloads上のnoexecにも対応します。Linux arm64のビルド成功だけでAndroid動作保証はしません。
 
-共通installerで単一CLI `phoneops` とWidget「Codex PhoneOps」を導入します。引数なしではUbuntu / Windows / 手動カードを選ぶトップメニューを開き、Windows復旧へ直接入る場合は `phoneops win11` です。Ubuntuの初回登録は `phoneops ubuntu setup`。UbuntuのSSH設定は既定で `$HOME/.ssh/config` を読み、別の場所なら `--ssh-config` で指定します。SSH agentを使う場合は起動環境で `SSH_AUTH_SOCK` を設定してください。旧版を利用していた場合は、末尾の移行手順を先に確認してください。
+共通installerで単一CLI `cpo` とWidget「Codex PhoneOps」を導入します。引数なしではUbuntu / Windows / 手動カードを選ぶトップメニューを開き、Windows復旧へ直接入る場合は `cpo win11` です。Ubuntuの初回登録は `cpo ubuntu setup`。UbuntuのSSH設定は既定で `$HOME/.ssh/config` を読み、別の場所なら `--ssh-config` で指定します。SSH agentを使う場合は起動環境で `SSH_AUTH_SOCK` を設定してください。旧版を利用していた場合は、末尾の移行手順を先に確認してください。
 
 ## 初回登録
 
-`phoneops win11 setup` が現在のSSH alias、既存SSH設定の絶対パス、対象Windows名、`DOMAIN\user`、保存済みRDP名と接続先、復旧したい作業名を尋ねます。過去資料のIPやaliasを自動登録しません。既存鍵・known_hostsは読み取り利用し、鍵の登録・解除・ホスト鍵承認は代行しません。
+`cpo win11 setup` が現在のSSH alias、既存SSH設定の絶対パス、対象Windows名、`DOMAIN\user`、保存済みRDP名と接続先、復旧したい作業名を尋ねます。過去資料のIPやaliasを自動登録しません。既存鍵・known_hostsは読み取り利用し、鍵の登録・解除・ホスト鍵承認は代行しません。
 
 対象を確認して読取り診断を許可すると、観測したユーザー・SID・ホストを表示します。ChatGPTとChatGPT Classicの候補はAppID付きで表示し、番号で明示選択します。0は保留です。候補が見つからなくても未インストールとは断定せず、アプリUNKNOWNの登録にできます。最後の本人確認でWindows専用設定を保存します。
 
-アプリ更新やSSH設定の変更後は、内容を確認して `phoneops win11 setup --replace` で再登録します。旧設定は同じ専用ディレクトリへ時刻付きbackupとして保存します。設定保存前にもSSH設定のhashを再確認します。SSH接続ユーザーと対象GUIユーザーは同一を初期版の登録条件とします。
+アプリ更新やSSH設定の変更後は、内容を確認して `cpo win11 setup --replace` で再登録します。旧設定は同じ専用ディレクトリへ時刻付きbackupとして保存します。設定保存前にもSSH設定のhashを再確認します。SSH接続ユーザーと対象GUIユーザーは同一を初期版の登録条件とします。
 
 ## 通常の復旧
 
@@ -49,13 +49,13 @@ ChatGPTプロセスを確認してもRemote利用可能とは表示しません�
 
 ## 診断と逃げ道
 
-`phoneops win11 check` は登録対象を一度だけ診断します。`phoneops win11 check --json` はSID、ユーザー、アプリID、IP、パス、生stderrを含めない要約です。`phoneops win11 check --certificate` は任意のRDP証明書SHA-1照合情報を表示します。証明書の読み取りやクライアント側での同種指紋表示ができなければUNKNOWNです。
+`cpo win11 check` は登録対象を一度だけ診断します。`cpo win11 check --json` はSID、ユーザー、アプリID、IP、パス、生stderrを含めない要約です。`cpo win11 check --certificate` は任意のRDP証明書SHA-1照合情報を表示します。証明書の読み取りやクライアント側での同種指紋表示ができなければUNKNOWNです。
 
 RDP待受を確認してもAndroid端末側からの経路・認証成功ではありません。SSH到達失敗からWindows停止とは断定しません。Tailscaleはサービス観測のみで、tailnetの疎通・認証成功を保証しません。
 
 直接SSHは変更可能な純正シェルです。ツール内の安全制御の外に移ることを表示します。Enter → `~` → `.` でSSH接続だけ切断できます。`--readonly` は診断・案内だけを許可し、設定・復旧メモ更新やSSHシェル起動を禁止します。
 
-`phoneops card` は設定・lock・ネットワークなしで利用できます。本体も起動不能なら同梱の手動カードを読んでください。信頼異常はRDPへ迂回して無視してよい警告ではありません。
+`cpo card` は設定・lock・ネットワークなしで利用できます。本体も起動不能なら同梱の手動カードを読んでください。信頼異常はRDPへ迂回して無視してよい警告ではありません。
 
 ## 保存と更新・復元
 
@@ -63,9 +63,9 @@ Windows設定は `$HOME/.config/codex-phone-ops/win11/config.json`、復旧メ�
 
 観測は常に前回情報として表示し、2分以上経過・未来時刻・時刻なしならSTALEです。起動し直した時や他アプリから戻った時は `r` で再確認します。WindowsへのWRITE処理自体を実装していません。
 
-installerは版とbinary hashごとの専用ディレクトリを作り、旧launcher／WidgetをWidget外のbackupへ保存して切り替えます。既存設定・復旧メモは書き換えず、更新時のsnapshotだけbackupに保存します。別製品のファイルやsymlinkが追加先にあれば中止します。
+installerは版とbinary hashごとの専用ディレクトリを作り、旧launcher／WidgetをWidget外のbackupへ保存して切り替えます。管理下の旧 `phoneops` launcherは `legacy-launcher` としてbackupし、`cpo` とWidgetの切替成功後に取り外します。管理外の旧入口は残して通知します。既存設定・復旧メモは書き換えず、更新時のsnapshotだけbackupに保存します。別製品のファイルやsymlinkが新しい入口にあれば中止します。
 
-戻す時はinstallerが表示したbackupディレクトリの `launcher` を `$HOME/.local/bin/phoneops` へ、`widget` を `$HOME/.shortcuts/Codex PhoneOps` へコピーします。設定・復旧メモは巻き戻しません。初回追加でbackupの入口がない場合は旧版への復元対象がありません。削除は別途本人判断です。
+手動で戻す時はinstallerが表示したbackupディレクトリの `launcher` を `$HOME/.local/bin/cpo` へ、`widget` を `$HOME/.shortcuts/Codex PhoneOps` へコピーします。旧 `phoneops` からの更新なら `legacy-launcher` を `$HOME/.local/bin/phoneops` へ戻し、新しい `cpo` launcherは内容を確認してから取り外します。設定・復旧メモは巻き戻しません。backupに入口がない場合は復元対象がありません。
 
 Ubuntu設定は `$HOME/.config/codex-phone-ops/ubuntu/config.json`、操作記録は `$HOME/.local/state/codex-phone-ops/ubuntu/operations/` です。両入口の `--config-dir`、`--state-dir` で保存先を明示できます。従来どおりHOME基準で、XDG環境変数による上書きは実装していません。cacheは作成しません。
 
@@ -79,8 +79,8 @@ Windowsへの恒久配置・タスク登録・サービス変更はありませ�
 設定ファイルの内容・SSH鍵・接続先は変更不要です。旧データをそのまま保持したまま使う場合は、次の明示指定ができます。Ubuntuでは旧操作記録も同じディレクトリにあるため、両方の引数が必要です。
 
 ```bash
-phoneops ubuntu --config-dir "$HOME/.config/codex-control-ubuntu" --state-dir "$HOME/.config/codex-control-ubuntu"
-phoneops win11 --config-dir "$HOME/.config/codex-win-remote" --state-dir "$HOME/.local/state/codex-win-remote"
+cpo ubuntu --config-dir "$HOME/.config/codex-control-ubuntu" --state-dir "$HOME/.config/codex-control-ubuntu"
+cpo win11 --config-dir "$HOME/.config/codex-win-remote" --state-dir "$HOME/.local/state/codex-win-remote"
 ```
 
 新しい既定先へ移す場合は、旧ディレクトリをbackupし、新しい移行先が未作成であることを確認してから、以下の対応で**コピー**します。既存の新設定へ上書き・混合しません。個人領域内で `umask 077` を使用し、ディレクトリ0700・ファイル0600を維持します。

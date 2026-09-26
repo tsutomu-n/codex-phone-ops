@@ -27,7 +27,7 @@ func run() error {
 		switch args[0] {
 		case "help", "-h", "--help":
 			fmt.Println(`Codex PhoneOps — Android / Termuxからの操作・復旧入口
-使い方: phoneops [ubuntu|win11|card|version|help]
+使い方: cpo [ubuntu|win11|card|version|help]
   引数なし                     Ubuntu / Windows / 手動カードを選択
   ubuntu [setup|cloud] [flags]  Ubuntu TUI
   win11 [setup|check] [flags]   Windows Remote復旧
@@ -119,7 +119,7 @@ func runUbuntu(args []string) error {
 		fmt.Println("Codex PhoneOps", control.Version)
 		return nil
 	}
-	fs := flag.NewFlagSet("phoneops ubuntu", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cpo ubuntu", flag.ContinueOnError)
 	dir := fs.String("config-dir", control.DefaultDir(), "本ツール専用の設定フォルダー")
 	state := fs.String("state-dir", control.StateDir(), "操作記録フォルダー")
 	ro := fs.Bool("readonly", false, "読取り専用（純正への移動・サービス起動を禁止）")
@@ -150,7 +150,7 @@ func runUbuntu(args []string) error {
 	}
 	c, e := control.Load(control.Expand(*dir))
 	if e != nil {
-		return fmt.Errorf("登録情報を開けません: %w\n最初に phoneops ubuntu setup を実行してください。", e)
+		return fmt.Errorf("登録情報を開けません: %w\n最初に cpo ubuntu setup を実行してください。", e)
 	}
 	t, e := control.NewTerminal()
 	if e != nil {

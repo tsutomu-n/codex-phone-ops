@@ -7,6 +7,8 @@ Unofficial project. Not affiliated with or endorsed by OpenAI.
 
 Android / Termuxから、UbuntuのCodex CLI操作とWindows 11のChatGPT Remote復旧へ戻るための個人向けツールです。SSH接続、純正CLIへの移動、RDPでの手動復旧手順を一つの入口にまとめ、スマートフォンで「次に何を確認するか」を迷わないために作りました。
 
+製品名はCodex PhoneOps、コマンド名はその頭文字の `cpo` です。
+
 既存のSSH・RDP接続を自分で管理できる利用者が対象です。Codex CLIやChatGPTの代替クライアントではありません。
 
 - **Ubuntu Codex CLI**：既存作業の一覧・resume・明示した新規開始、確認付きdaemon start、直接SSH、純正doctor、Cloudへの入口。
@@ -15,7 +17,7 @@ Android / Termuxから、UbuntuのCodex CLI操作とWindows 11のChatGPT Remote�
 
 ## 現在の状態
 
-バージョンは **0.2.0・未公開の配布候補**です。正式リリースではありません。Linuxのローカル試験・静的ビルドが対象で、Android実機、Windows実機、実ChatGPT Remoteの受入は未完了です。GitHub Actionsは定義済みですが、ローカル検証とGitHub上の実行成功は別です。
+バージョンは **0.2.0・正式Release前の配布候補**です。Linuxのローカル試験・静的ビルドが対象で、Android実機、Windows実機、実ChatGPT Remoteの受入は未完了です。GitHub Actionsは定義済みですが、ローカル検証とGitHub上の実行成功は別です。
 
 Repository / Go module: `github.com/tsutomu-n/codex-phone-ops`
 
@@ -38,11 +40,13 @@ Termuxに既存のbash・OpenSSH・tar・sha256sumが必要です。配布候補
 
 ```bash
 bash install.sh
-"$HOME/.local/bin/phoneops" version
-"$HOME/.local/bin/phoneops" card
+"$HOME/.local/bin/cpo" version
+"$HOME/.local/bin/cpo" card
 ```
 
-`$HOME/.local/bin` がPATHに入っていれば `phoneops` で起動できます。Termux:Widgetは「Codex PhoneOps」を作成します。REFRESH後に利用してください。初回登録は接続先を確認して `phoneops ubuntu setup` または `phoneops win11 setup` を実行します。Windows登録では復旧したい作業名も指定します。setupには対象へのSSH診断が伴います。
+`$HOME/.local/bin` がPATHに入っていれば `cpo` で起動できます。Termux:Widgetは「Codex PhoneOps」を作成します。REFRESH後に利用してください。初回登録は接続先を確認して `cpo ubuntu setup` または `cpo win11 setup` を実行します。Windows登録では復旧したい作業名も指定します。setupには対象へのSSH診断が伴います。
+
+旧版の管理下にある `phoneops` launcherは、installerがbackup後に取り外します。`phoneops` の互換コマンドは提供しません。設定と操作記録の保存先は変わりません。
 
 詳しい導入・更新・旧設定移行は [利用手順](USER_MANUAL.md)、実行不能時は [手動復旧カード](RECOVERY_CARD.md) を参照してください。
 
@@ -50,17 +54,17 @@ bash install.sh
 
 | コマンド | 動作 |
 |---|---|
-| `phoneops` | Ubuntu / Windows / 手動カードを選ぶトップメニュー |
-| `phoneops ubuntu` | Ubuntu TUI。doctorは `d` キー |
-| `phoneops ubuntu setup` | Ubuntu登録 |
-| `phoneops ubuntu cloud` | Termuxで公式Cloud画面を開く |
-| `phoneops win11` | Windows復旧メニュー |
-| `phoneops win11 setup` | Windows登録 |
-| `phoneops win11 check` | 登録先への読取り診断。`--json` / `--certificate` を選択可能 |
-| `phoneops card` | 設定・通信不要の手動カード |
-| `phoneops version` / `phoneops help` | 製品版・使い方 |
+| `cpo` | Ubuntu / Windows / 手動カードを選ぶトップメニュー |
+| `cpo ubuntu` | Ubuntu TUI。doctorは `d` キー |
+| `cpo ubuntu setup` | Ubuntu登録 |
+| `cpo ubuntu cloud` | Termuxで公式Cloud画面を開く |
+| `cpo win11` | Windows復旧メニュー |
+| `cpo win11 setup` | Windows登録 |
+| `cpo win11 check` | 登録先への読取り診断。`--json` / `--certificate` を選択可能 |
+| `cpo card` | 設定・通信不要の手動カード |
+| `cpo version` / `cpo help` | 製品版・使い方 |
 
-各入口の `-h` でオプションを確認できます。Ubuntu / Win11には `--readonly` があります。単独の `phoneops doctor` は追加していません。
+各入口の `-h` でオプションを確認できます。Ubuntu / Win11には `--readonly` があります。単独の `cpo doctor` は追加していません。
 
 ## 保存先
 
@@ -69,7 +73,7 @@ bash install.sh
 - 設定：`$HOME/.config/codex-phone-ops/ubuntu/`、`$HOME/.config/codex-phone-ops/win11/`
 - 操作記録・復旧メモ：`$HOME/.local/state/codex-phone-ops/ubuntu/`、`$HOME/.local/state/codex-phone-ops/win11/`
 - 実行ファイル・更新backup：`$HOME/.local/lib/codex-phone-ops/`
-- launcher：`$HOME/.local/bin/phoneops`、Widget：`$HOME/.shortcuts/Codex PhoneOps`
+- launcher：`$HOME/.local/bin/cpo`、Widget：`$HOME/.shortcuts/Codex PhoneOps`
 - cache：現在は使用・作成しません。
 
 旧データは自動移動・削除しません。旧設定を利用していた場合は利用手順の移行節を先に読んでください。

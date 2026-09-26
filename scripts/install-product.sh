@@ -2,8 +2,8 @@
 # Shared local installer. No network, SSH or settings migration.
 set -euo pipefail
 here=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
-binary=phoneops
-name=phoneops
+binary=cpo
+name=cpo
 package=codex-phone-ops
 widget='Codex PhoneOps'
 marker=CODEX_PHONE_OPS_MANAGED
@@ -15,12 +15,21 @@ file="$binary-linux-$arch"
 umask 077
 base="$HOME/.local/lib/$package"
 launcher="$HOME/.local/bin/$name"
+legacy_launcher="$HOME/.local/bin/phoneops"
 shortcut="$HOME/.shortcuts/$widget"
 for target in "$launcher" "$shortcut"; do
  if [[ -e "$target" || -L "$target" ]]; then
   [[ -f "$target" && ! -L "$target" ]] && grep -qx "# $marker" "$target" || { echo "既存ファイルを保護して中止: $target" >&2; exit 1; }
  fi
 done
+manage_legacy=0
+if [[ -e "$legacy_launcher" || -L "$legacy_launcher" ]]; then
+ if [[ -f "$legacy_launcher" && ! -L "$legacy_launcher" ]] && grep -qx "# $marker" "$legacy_launcher"; then
+  manage_legacy=1
+ else
+  printf '管理外の旧入口は変更しません: %s\n' "$legacy_launcher" >&2
+ fi
+fi
 mkdir -p -- "$base"
 stage=$(mktemp -d "$base/.staging.XXXXXXXX")
 backup=''; changed=0; had_launcher=0; had_widget=0
@@ -29,6 +38,7 @@ cleanup() {
  if [[ $code != 0 && $changed == 1 ]]; then
   if [[ $had_launcher == 1 ]]; then cp -p -- "$backup/launcher" "$launcher"; else rm -f -- "$launcher"; fi
   if [[ $had_widget == 1 ]]; then cp -p -- "$backup/widget" "$shortcut"; else rm -f -- "$shortcut"; fi
+  if [[ $manage_legacy == 1 && ! -e "$legacy_launcher" && ! -L "$legacy_launcher" ]]; then cp -p -- "$backup/legacy-launcher" "$legacy_launcher"; fi
   echo '切替失敗。前の入口へ復元しました。' >&2
  fi
  rm -rf -- "$stage"
@@ -47,6 +57,7 @@ if [[ -e "$root" || -L "$root" ]]; then
  actual=$(sha256sum "$root/$binary"); [[ "${actual%% *}" == "$hash" ]] || { echo '既存版ディレクトリの衝突。中止。' >&2; exit 1; }
 fi
 printf 'Codex PhoneOps 追加・更新先:\n%s\n%s\n%s\n' "$root" "$launcher" "$shortcut"
+if [[ $manage_legacy == 1 ]]; then printf '管理下の旧入口をbackup後に削除: %s\n' "$legacy_launcher"; fi
 printf '設定・SSH鍵を変更せず、旧入口をbackupします。続けますか？ [y/N]: '
 read -r answer
 [[ "$answer" == y || "$answer" == Y ]] || exit 0
@@ -54,6 +65,7 @@ mkdir -p -- "$base/backups" "$(dirname "$launcher")" "$(dirname "$shortcut")"
 backup=$(mktemp -d "$base/backups/update.XXXXXXXX")
 if [[ -f "$launcher" ]]; then cp -p -- "$launcher" "$backup/launcher"; had_launcher=1; fi
 if [[ -f "$shortcut" ]]; then cp -p -- "$shortcut" "$backup/widget"; had_widget=1; fi
+if [[ $manage_legacy == 1 ]]; then cp -p -- "$legacy_launcher" "$backup/legacy-launcher"; fi
 # Settings are not overwritten. Preserve snapshots for a manual rollback audit.
 for target in ubuntu win11; do
  if [[ -d "$HOME/.config/$package/$target" ]]; then cp -Rp -- "$HOME/.config/$package/$target" "$backup/config-$target"; fi
@@ -68,7 +80,14 @@ chmod 700 "$stage/launcher" "$stage/widget"
 changed=1
 mv -f -- "$stage/launcher" "$launcher"
 mv -f -- "$stage/widget" "$shortcut"
+if [[ $manage_legacy == 1 ]]; then
+ [[ -f "$legacy_launcher" && ! -L "$legacy_launcher" ]] || { echo '旧入口が変更されたため切替を中止します。' >&2; exit 1; }
+ old_hash=$(sha256sum "$backup/legacy-launcher"); old_hash=${old_hash%% *}
+ live_hash=$(sha256sum "$legacy_launcher"); live_hash=${live_hash%% *}
+ [[ "$live_hash" == "$old_hash" ]] || { echo '旧入口が変更されたため切替を中止します。' >&2; exit 1; }
+ rm -f -- "$legacy_launcher"
+fi
 changed=0
 printf '配置しました。backup: %s\n' "$backup"
-printf '戻す場合はbackupのlauncher/widgetのみ元の表示先へコピーします。設定・復旧メモは巻き戻しません。\n'
+printf '戻す場合はbackupのlauncher/widgetを表示先へ、旧入口があればlegacy-launcherを元の場所へコピーします。設定・復旧メモは巻き戻しません。\n'
 printf '起動: %s\nTermux:WidgetをREFRESHしてください。\n' "$launcher"

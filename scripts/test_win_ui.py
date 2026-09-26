@@ -3,7 +3,7 @@
 import json, os, subprocess, tempfile, hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-BIN=ROOT/'dist/phoneops-linux-amd64'
+BIN=ROOT/'dist/cpo-linux-amd64'
 with tempfile.TemporaryDirectory() as td:
     d=Path(td); config=d/'config';state=d/'state'; config.mkdir()
     env=dict(os.environ, HOME=td, PATH=td+':'+os.environ['PATH'])

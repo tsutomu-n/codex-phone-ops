@@ -34,7 +34,7 @@ bash "$stage/$source_name/scripts/build.sh"
 mkdir -p "$stage/$name/dist" "$stage/$name/scripts"
 cp "$stage/$source_name/"{LICENSE,install.sh,README.md,USER_MANUAL.md,RECOVERY_CARD.md} "$stage/$name/"
 cp "$stage/$source_name/scripts/install-product.sh" "$stage/$name/scripts/"
-cp "$stage/$source_name/dist/"{phoneops-linux-amd64,phoneops-linux-arm64,SHA256SUMS} "$stage/$name/dist/"
+cp "$stage/$source_name/dist/"{cpo-linux-amd64,cpo-linux-arm64,SHA256SUMS} "$stage/$name/dist/"
 (cd "$stage/$name" && find . -type f ! -name CONTENTS.sha256 -print0 | sort -z | xargs -0 sha256sum > CONTENTS.sha256)
 tar -czf "$stage/$name.tar.gz" -C "$stage" "$name"
 (cd "$stage" && sha256sum "$name.tar.gz" "$source_name.tar.gz" > SHA256SUMS.txt)

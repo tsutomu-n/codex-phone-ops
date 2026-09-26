@@ -18,7 +18,7 @@ import tempfile
 import termios
 import time
 
-BIN = Path(sys.argv[1] if len(sys.argv) > 1 else "dist/phoneops-linux-amd64").resolve()
+BIN = Path(sys.argv[1] if len(sys.argv) > 1 else "dist/cpo-linux-amd64").resolve()
 FIXTURE = r'''#!/bin/sh
 if [ "$1" = --version ]; then echo 'codex-cli 0.155.1'; exit 0; fi
 if [ "$1 $2 $3" = 'app-server daemon version' ]; then
@@ -170,7 +170,7 @@ for case in ("normal", "abnormal", "cold", "new", "resume", "lost", "readonly", 
     scenario(case)
 
 for choice, expected in (("3", "WindowsのChatGPT Remoteへ戻る"), ("2", "codex-phone-ops"), ("q", "")):
-    with tempfile.TemporaryDirectory(prefix="phoneops-top-") as td:
+    with tempfile.TemporaryDirectory(prefix="cpo-top-") as td:
         master, slave = pty.openpty()
         before = termios.tcgetattr(slave)
         proc = subprocess.Popen([str(BIN)], env=dict(os.environ, HOME=td, TERM="dumb"),

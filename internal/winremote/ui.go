@@ -67,7 +67,7 @@ func Run(args []string) error {
 	if cmd != "" && cmd != "setup" && cmd != "check" {
 		return errors.New("利用可能: setup / card / check / version")
 	}
-	fs := flag.NewFlagSet("phoneops win11", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cpo win11", flag.ContinueOnError)
 	dir := fs.String("config-dir", ConfigDir(), "Windows専用設定")
 	state := fs.String("state-dir", StateDir(), "復旧メモ")
 	ro := fs.Bool("readonly", false, "診断・案内のみ。保存・SSHシェルは禁止")
@@ -126,7 +126,7 @@ func Run(args []string) error {
 	}
 	c, e := Load(*dir)
 	if e != nil {
-		show("設定を読めません。手動カードは利用可能です。\nphoneops card")
+		show("設定を読めません。手動カードは利用可能です。\ncpo card")
 		return e
 	}
 	if cmd == "check" {

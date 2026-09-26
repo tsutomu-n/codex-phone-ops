@@ -20,7 +20,7 @@ import (
 // ssh passes the remote command through the server's shell.
 func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 func RemoteCommand(script string, args ...string) string {
-	a := []string{"sh", "-c", script, "phoneops"}
+	a := []string{"sh", "-c", script, "cpo"}
 	a = append(a, args...)
 	for i := range a {
 		a[i] = ShellQuote(a[i])
@@ -36,7 +36,7 @@ type Remote struct {
 func (r Remote) Command(ctx context.Context, tty bool, script string, args ...string) *exec.Cmd {
 	var cmd *exec.Cmd
 	if r.Local {
-		a := []string{"-c", script, "phoneops"}
+		a := []string{"-c", script, "cpo"}
 		a = append(a, args...)
 		if ctx == nil {
 			cmd = exec.Command("sh", a...)

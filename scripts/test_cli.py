@@ -7,7 +7,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-BIN = ROOT / 'dist/phoneops-linux-amd64'
+BIN = ROOT / 'dist/cpo-linux-amd64'
 with tempfile.TemporaryDirectory() as td:
     home = Path(td)
     ssh = home / 'ssh'
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as td:
 with tempfile.NamedTemporaryFile(prefix='SHOULD_NOT_PACKAGE-', suffix='.txt',
                                  dir=ROOT / 'internal') as secret, \
      tempfile.NamedTemporaryFile(prefix='z_should_not_build_', suffix='.go',
-                                 dir=ROOT / 'cmd/phoneops') as extra_go:
+                                 dir=ROOT / 'cmd/cpo') as extra_go:
     secret.write(b'local private test fixture')
     secret.flush()
     extra_go.write(b'package main\nimport "os"\nfunc init() { os.Stderr.WriteString("UNTRACKED_GO_MARKER\\n") }\n')
@@ -59,6 +59,8 @@ with tempfile.NamedTemporaryFile(prefix='SHOULD_NOT_PACKAGE-', suffix='.txt',
     source_archive = ROOT / 'dist/release/codex-phone-ops-0.2.0-source.tar.gz'
     with tarfile.open(source_archive, 'r:gz') as tar:
         names = tar.getnames()
+        assert any(name.endswith('/cmd/cpo/main.go') for name in names)
+        assert not any('/cmd/phoneops/' in name for name in names)
         assert not any(Path(name).name in (Path(secret.name).name, Path(extra_go.name).name)
                        for name in names)
         assert any(name.endswith('/scripts/package.sh') for name in names)
@@ -74,12 +76,12 @@ with tempfile.NamedTemporaryFile(prefix='SHOULD_NOT_PACKAGE-', suffix='.txt',
         with tarfile.open(binary_archive, 'r:gz') as tar:
             binary_license = next(m for m in tar.getmembers() if m.name.endswith('/LICENSE'))
             assert tar.extractfile(binary_license).read() == (ROOT / 'LICENSE').read_bytes()
-            member = next(m for m in tar.getmembers() if m.name.endswith('/dist/phoneops-linux-amd64'))
-            packaged_bin = Path(td) / 'phoneops'
+            member = next(m for m in tar.getmembers() if m.name.endswith('/dist/cpo-linux-amd64'))
+            packaged_bin = Path(td) / 'cpo'
             packaged_bin.write_bytes(tar.extractfile(member).read())
-            assert packaged_bin.read_bytes() == (source_dir / 'dist/phoneops-linux-amd64').read_bytes()
-            arm_member = next(m for m in tar.getmembers() if m.name.endswith('/dist/phoneops-linux-arm64'))
-            assert tar.extractfile(arm_member).read() == (source_dir / 'dist/phoneops-linux-arm64').read_bytes()
+            assert packaged_bin.read_bytes() == (source_dir / 'dist/cpo-linux-amd64').read_bytes()
+            arm_member = next(m for m in tar.getmembers() if m.name.endswith('/dist/cpo-linux-arm64'))
+            assert tar.extractfile(arm_member).read() == (source_dir / 'dist/cpo-linux-arm64').read_bytes()
         packaged_bin.chmod(0o700)
         p = subprocess.run([str(packaged_bin), 'version'], text=True,
                            capture_output=True, timeout=5)
