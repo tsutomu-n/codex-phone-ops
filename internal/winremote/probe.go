@@ -17,7 +17,7 @@ import (
 //go:embed probe.ps1
 var probe string
 
-const bootstrap = `$ErrorActionPreference='Stop';[Console]::InputEncoding=New-Object System.Text.UTF8Encoding($false);$r=[Console]::In.ReadToEnd()|ConvertFrom-Json;& ([ScriptBlock]::Create($r.code)) $r.data`
+const bootstrap = `$ErrorActionPreference='Stop';[Console]::InputEncoding=New-Object System.Text.UTF8Encoding($false);$r=[Console]::In.ReadToEnd().TrimStart([char]0xFEFF)|ConvertFrom-Json;& ([ScriptBlock]::Create($r.code)) $r.data`
 
 func encoded(s string) string {
 	u := utf16.Encode([]rune(s))
