@@ -72,6 +72,65 @@ func TestParse(t *testing.T) {
 		t.Fatal("accepted missing item")
 	}
 }
+func TestParseRequiredObservedFields(t *testing.T) {
+	_, o := fixture()
+	o.Machine = full(Machine{Hash: "abc", Boot: "2026-01-01T00:00:00Z"})
+	o.App.Value.SessionID = 3
+	base, _ := json.Marshal(o)
+	for _, tc := range []struct {
+		check, field string
+		value        any
+	}{
+		{"app", "running", nil}, {"app", "running", "wrong"},
+		{"app", "sessionId", nil}, {"sessions", "id", nil},
+		{"rdp", "listening", nil}, {"rdp", "listening", "wrong"},
+		{"rdp", "port", nil}, {"machine", "hash", nil}, {"machine", "boot", nil},
+	} {
+		for _, omit := range []bool{false, true} {
+			var wire map[string]any
+			json.Unmarshal(base, &wire)
+			check := wire[tc.check].(map[string]any)
+			var value map[string]any
+			if tc.check == "sessions" {
+				value = check["value"].([]any)[0].(map[string]any)
+			} else {
+				value = check["value"].(map[string]any)
+			}
+			if omit {
+				delete(value, tc.field)
+			} else {
+				value[tc.field] = tc.value
+			}
+			b, _ := json.Marshal(wire)
+			parsed, err := Parse(b, "test")
+			if err == nil || parsed.Schema != 0 {
+				t.Fatalf("accepted %s.%s omit=%t: %+v", tc.check, tc.field, omit, parsed)
+			}
+		}
+	}
+	for _, running := range []bool{true, false} {
+		o.App.Value.Running = running
+		if !running {
+			o.App.Value.SessionID = -1
+		}
+		b, _ := json.Marshal(o)
+		if _, err := Parse(b, "test"); err != nil {
+			t.Fatal(running, err)
+		}
+	}
+}
+func TestVerifyUnavailableAndMismatch(t *testing.T) {
+	c, o := fixture()
+	c.Machine = "registered"
+	var re *control.RunError
+	if err := Verify(c, o); !errors.As(err, &re) || re.Kind != "identity_unknown" {
+		t.Fatal(err)
+	}
+	o.Identity.Value.Host = "other"
+	if err := Verify(c, o); !errors.As(err, &re) || re.Kind != "ssh_trust" {
+		t.Fatal(err)
+	}
+}
 func TestContextAndPrivacy(t *testing.T) {
 	now := time.Now()
 	for _, age := range []time.Duration{3 * time.Minute, -time.Minute} {
@@ -168,6 +227,76 @@ func TestProbeFakeSSHConnectionLoss(t *testing.T) {
 		t.Fatal(got, e)
 	}
 }
+func TestProbeFinalResponseAndExecutionError(t *testing.T) {
+	d := t.TempDir()
+	c, o := fixture()
+	c.Alias = "test"
+	c.SSHConfig = filepath.Join(d, "ssh_config")
+	os.WriteFile(c.SSHConfig, []byte("Host test\n"), 0600)
+	c.SSHHash, _ = control.HashFile(c.SSHConfig)
+	raw, _ := json.Marshal(o)
+	fixturePath := filepath.Join(d, "fixture.json")
+	os.WriteFile(fixturePath, raw, 0600)
+	script := `#!/usr/bin/env python3
+import json,sys,time,os
+r=json.load(sys.stdin)
+o=json.load(open(` + strconvQuote(fixturePath) + `))
+o['requestId']=r['data']['requestId']
+mode=os.environ.get('CPO_FAKE_MODE')
+print('CPO_PROBE_STARTED_V1:'+o['requestId'],file=sys.stderr,flush=True)
+if mode=='host-key': print('Host key verification failed.',file=sys.stderr,flush=True)
+print(json.dumps(o) if mode!='partial' else '{"schemaVersion":1',flush=True)
+if mode in ('timeout','canceled'): time.sleep(2)
+sys.exit(255 if mode=='host-key' else 0)
+`
+	os.WriteFile(filepath.Join(d, "ssh"), []byte(script), 0700)
+	t.Setenv("PATH", d+":"+os.Getenv("PATH"))
+	for _, tc := range []struct {
+		mode, want string
+		valid      bool
+	}{
+		{"timeout", "timeout", true}, {"canceled", "canceled", true},
+		{"host-key", "ssh_trust", false}, {"partial", "diagnostic_parse", false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			t.Setenv("CPO_FAKE_MODE", tc.mode)
+			ctx := context.Background()
+			if tc.mode == "timeout" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+				defer cancel()
+			}
+			if tc.mode == "canceled" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				time.AfterFunc(100*time.Millisecond, cancel)
+			}
+			got, err := Probe(ctx, c, false)
+			var re *control.RunError
+			if !errors.As(err, &re) || re.Kind != tc.want || (got.Schema == 1) != tc.valid {
+				t.Fatalf("observation=%+v error=%v", got, err)
+			}
+		})
+	}
+}
+func TestStartedMarker(t *testing.T) {
+	for _, tc := range []struct {
+		stderr string
+		want   bool
+	}{
+		{"CPO_PROBE_STARTED_V1:id\r\n", true},
+		{"noise\nCPO_PROBE_STARTED_V1:id\n", true},
+		{"CPO_PROBE_STARTED_V1:id\nCPO_PROBE_STARTED_V1:id\n", false},
+		{"CPO_PROBE_STARTED_V1:other\n", false},
+		{"prefix CPO_PROBE_STARTED_V1:id\n", false},
+		{"CPO_PROBE_STARTED_V1:id", false},
+	} {
+		if started(tc.stderr, "id") != tc.want {
+			t.Fatal(tc)
+		}
+	}
+}
 func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
 
 func TestDeniedFixture(t *testing.T) {
@@ -183,5 +312,41 @@ func TestDeniedFixture(t *testing.T) {
 	s := Decide(c, o)
 	if s.State != "unknown" || !strings.Contains(s.Checks["sessions"], "denied") || !o.RDP.Full() {
 		t.Fatal(s)
+	}
+}
+
+func TestHumanTimeAndStoredUTC(t *testing.T) {
+	original := getpropPath
+	getpropPath = filepath.Join(t.TempDir(), "getprop")
+	defer func() { getpropPath = original }()
+	instant := time.Date(2026, 9, 27, 7, 3, 0, 0, time.UTC)
+	for _, tc := range []struct{ tz, want string }{
+		{"", "2026-09-27 07:03\nUTC（TZ空指定） (UTC+00:00)"},
+		{"UTC", "2026-09-27 07:03\nUTC (UTC+00:00)"},
+		{"Asia/Tokyo", "2026-09-27 16:03\nAsia/Tokyo (UTC+09:00)"},
+		{"invalid/zone", "2026-09-27 07:03\nUTC（TZを解釈できません） (UTC+00:00)"},
+	} {
+		t.Setenv("TZ", tc.tz)
+		if got := humanTime(instant); got != tc.want {
+			t.Fatalf("TZ=%q: %q", tc.tz, got)
+		}
+	}
+	if instant.Location() != time.UTC || instant.Hour() != 7 {
+		t.Fatal("stored time mutated")
+	}
+	t.Setenv("TZ", "America/New_York")
+	winter := humanTime(time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC))
+	summer := humanTime(time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC))
+	if !strings.Contains(winter, "UTC-05:00") || !strings.Contains(summer, "UTC-04:00") {
+		t.Fatal(winter, summer)
+	}
+	os.Unsetenv("TZ")
+	os.WriteFile(getpropPath, []byte("#!/bin/sh\nprintf Asia/Tokyo\n"), 0700)
+	if got := humanTime(instant); !strings.Contains(got, "Asia/Tokyo (UTC+09:00)") {
+		t.Fatal(got)
+	}
+	os.WriteFile(getpropPath, []byte("#!/bin/sh\nexit 1\n"), 0700)
+	if got := humanTime(instant); !strings.Contains(got, "UTC（Android地域を取得できません）") {
+		t.Fatal(got)
 	}
 }

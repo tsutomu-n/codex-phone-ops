@@ -10,6 +10,7 @@ import (
 	"github.com/tsutomu-n/codex-phone-ops/internal/control"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -32,6 +33,8 @@ Remote接続済みで作業がない時は、純正側でプロジェクト・�
 再起動・kill・Git変更・再ペアリング・Tailscale再認証は自動実行しません。
 パスワード・PIN・ペアリングコードは純正画面だけに入力してください。
 SSH失敗でもRDP手順は使えます。ただし信頼警告を迂回しないでください。`
+
+var getpropPath = "/system/bin/getprop"
 
 func show(s string) {
 	for _, l := range control.Wrap(s, 40) {
@@ -127,6 +130,9 @@ func Run(args []string) error {
 	c, e := Load(*dir)
 	if e != nil {
 		show("設定を読めません。手動カードは利用可能です。\ncpo card")
+		if os.IsNotExist(e) {
+			show("初回登録: cpo win11 setup")
+		}
 		return e
 	}
 	if cmd == "check" {
@@ -155,8 +161,14 @@ func printJSON(s Summary, e error) error {
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(b))
-	return e
+	if e != nil { return &PrintedError{e} }
+	return nil
 }
+
+// PrintedError keeps a failing exit code after the JSON error was printed.
+type PrintedError struct{ Err error }
+func (e *PrintedError) Error() string { return e.Err.Error() }
+func (e *PrintedError) Unwrap() error { return e.Err }
 func check(c Config, cert bool) (Summary, Observation, error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
@@ -165,6 +177,9 @@ func check(c Config, cert bool) (Summary, Observation, error) {
 		s := Decide(c, o)
 		if ve := Verify(c, o); ve != nil {
 			return s, o, ve
+		}
+		if e != nil {
+			s.Message = "応答時点の観測: " + s.Message + " 診断の実行は完了していません。"
 		}
 		return s, o, e
 	}
@@ -181,7 +196,7 @@ func check(c Config, cert bool) (Summary, Observation, error) {
 func display(c Config, s Summary) {
 	show("対象: " + c.Label + " / 目的: " + c.Purpose + "\n" + s.Message + "\n次: " + s.Next)
 	if !s.ObservedAt.IsZero() {
-		show("診断: " + s.ObservedAt.Local().Format("15:04"))
+		show("診断: " + humanTime(s.ObservedAt))
 	}
 	for _, key := range []string{"SSH", "identity", "sessions", "app", "candidates", "RDP", "machine", "Tailscale", "certificate"} {
 		if v, ok := s.Checks[key]; ok {
@@ -277,13 +292,13 @@ func menu(c Config, dir, state string, ro bool, reader *bufio.Reader) error {
 			show("読取り専用")
 		}
 		if !rec.ObservedAt.IsZero() {
-			show("前回観測: " + rec.ObservedAt.Local().Format("2006-01-02 15:04") + " / " + rec.LastObservation + "\n現在は未確認。rで再確認。")
+			show("前回観測: " + humanTime(rec.ObservedAt) + " / " + rec.LastObservation + "\n現在は未確認。rで再確認。")
 			if rec.Stale(time.Now()) {
 				show("観測は古くなっています（STALE）。")
 			}
 		}
 		if rec.Result != "" {
-			show("前回の本人確認: " + rec.ConfirmedAt.Local().Format("2006-01-02 15:04") + "\n" + rec.Result)
+			show("前回の本人確認: " + humanTime(rec.ConfirmedAt) + "\n" + rec.Result)
 		}
 		k, e := line(reader, "1 準備状態を確認 / r 再確認\n2 RDP接続情報・手順\n3 直接SSH\n4 Android Remoteの本人確認\n? 手動カード / q 終了")
 		if errors.Is(e, io.EOF) {
@@ -302,7 +317,7 @@ func menu(c Config, dir, state string, ro bool, reader *bufio.Reader) error {
 			s, _, e := check(c, false)
 			display(c, s)
 			rec.LastObservation = s.State
-			rec.ObservedAt = time.Now().UTC()
+			rec.ObservedAt = s.ObservedAt.UTC()
 			rec.Next = s.Next
 			if e != nil {
 				show("診断: " + e.Error())
@@ -363,4 +378,46 @@ func menu(c Config, dir, state string, ro bool, reader *bufio.Reader) error {
 			}
 		}
 	}
+}
+
+func displayLocation() (*time.Location, string) {
+	if tz, explicit := os.LookupEnv("TZ"); explicit {
+		if tz == "" {
+			return time.UTC, "UTC（TZ空指定）"
+		}
+		loc, err := time.LoadLocation(tz)
+		if err == nil {
+			return loc, tz
+		}
+		return time.UTC, "UTC（TZを解釈できません）"
+	}
+	if info, err := os.Stat(getpropPath); err == nil && info.Mode().IsRegular() && info.Mode()&0111 != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, getpropPath, "persist.sys.timezone")
+		var out bounded
+		cmd.Stdout = &out
+		if cmd.Run() == nil && !out.overflow && out.Len() <= 256 {
+			name := strings.TrimSpace(out.String())
+			if name != "" {
+				if loc, err := time.LoadLocation(name); err == nil {
+					return loc, name
+				}
+			}
+		}
+		return time.UTC, "UTC（Android地域を取得できません）"
+	}
+	return time.Local, "端末地域"
+}
+
+func humanTime(t time.Time) string {
+	loc, label := displayLocation()
+	local := t.In(loc)
+	_, offset := local.Zone()
+	sign := "+"
+	if offset < 0 {
+		sign = "-"
+		offset = -offset
+	}
+	return fmt.Sprintf("%s\n%s (UTC%s%02d:%02d)", local.Format("2006-01-02 15:04"), label, sign, offset/3600, offset%3600/60)
 }

@@ -140,7 +140,11 @@ func Parse(b []byte, id string) (Observation, error) {
 	var o Observation
 	b = []byte(strings.TrimPrefix(string(b), "\ufeff"))
 	if len(b) > 256*1024 || json.Unmarshal(b, &o) != nil || o.Schema != 1 || o.RequestID != id || o.CapturedAt.IsZero() {
-		return o, &control.RunError{Kind: "diagnostic_parse", Message: "診断応答の版・要求ID・形式が不正です。以前の良好状態では補いません"}
+		return Observation{}, &control.RunError{Kind: "diagnostic_parse", Message: "診断応答の版・要求ID・形式が不正です。以前の良好状態では補いません"}
+	}
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(b, &raw) != nil || !validObservedFields(raw, o) {
+		return Observation{}, &control.RunError{Kind: "diagnostic_parse", Message: "診断の必須値が欠落・不正です"}
 	}
 	if !o.Identity.valid() || !o.Machine.valid() || !o.Sessions.valid() || !o.Candidates.valid() || !o.App.valid() || !o.RDP.valid() || !o.Tailscale.valid() || !o.Certificate.valid() {
 		return Observation{}, &control.RunError{Kind: "diagnostic_parse", Message: "診断項目が欠落・不正です"}
@@ -157,21 +161,108 @@ func Parse(b []byte, id string) (Observation, error) {
 			seen[session.ID] = true
 		}
 	}
-	if o.App.Full() && (o.App.Value.ID == "" || o.App.Value.SID == "" || (o.App.Value.Running && o.App.Value.SessionID < 0)) {
+	if o.Machine.Full() {
+		if _, e := time.Parse(time.RFC3339Nano, o.Machine.Value.Boot); o.Machine.Value.Hash == "" || e != nil {
+			return Observation{}, errors.New("diagnostic_parse: machineの形式が不正です")
+		}
+	}
+	if o.App.Full() && (o.App.Value.ID == "" || o.App.Value.SID == "" || (o.App.Value.Running && o.App.Value.SessionID < 0) || (!o.App.Value.Running && o.App.Value.SessionID != -1)) {
 		return Observation{}, errors.New("diagnostic_parse: appの形式が不正です")
+	}
+	if o.App.Full() && o.App.Value.Running && o.Sessions.Full() {
+		matched := false
+		for _, session := range *o.Sessions.Value {
+			matched = matched || (session.ID == o.App.Value.SessionID && session.SID == o.App.Value.SID)
+		}
+		if !matched {
+			return Observation{}, errors.New("diagnostic_parse: appとsessionが一致しません")
+		}
 	}
 	if o.RDP.Full() && (o.RDP.Value.Port < 1 || o.RDP.Value.Port > 65535 || o.RDP.Value.Service == "") {
 		return Observation{}, errors.New("diagnostic_parse: RDPの形式が不正です")
 	}
 	return o, nil
 }
+
+// Check's value type is kept stable for decisions. Inspect the wire fields first:
+// decoding into bool/int would turn missing and null into false/zero.
+func validObservedFields(raw map[string]json.RawMessage, o Observation) bool {
+	for _, item := range []struct {
+		name   string
+		fields map[string]string
+	}{
+		{"machine", map[string]string{"hash": "string", "boot": "string"}},
+		{"app", map[string]string{"id": "string", "running": "bool", "sessionId": "int", "sid": "string"}},
+		{"rdp", map[string]string{"service": "string", "port": "int", "listening": "bool"}},
+	} {
+		var check struct {
+			Status       string          `json:"status"`
+			Completeness string          `json:"completeness"`
+			Value        json.RawMessage `json:"value"`
+		}
+		if json.Unmarshal(raw[item.name], &check) != nil || check.Status != "observed" || check.Completeness != "full" {
+			continue
+		}
+		if !validFields(check.Value, item.fields) {
+			return false
+		}
+	}
+	if o.Sessions.Full() {
+		var check struct {
+			Value []json.RawMessage `json:"value"`
+		}
+		if json.Unmarshal(raw["sessions"], &check) != nil {
+			return false
+		}
+		for _, row := range check.Value {
+			if !validFields(row, map[string]string{"id": "int", "state": "string", "sid": "string"}) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validFields(value json.RawMessage, fields map[string]string) bool {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(value, &obj) != nil || obj == nil {
+		return false
+	}
+	for name, kind := range fields {
+		b, ok := obj[name]
+		if !ok || len(b) == 0 || string(b) == "null" {
+			return false
+		}
+		switch kind {
+		case "bool":
+			var v bool
+			if json.Unmarshal(b, &v) != nil {
+				return false
+			}
+		case "int":
+			var v int
+			if json.Unmarshal(b, &v) != nil {
+				return false
+			}
+		case "string":
+			var v string
+			if json.Unmarshal(b, &v) != nil || v == "" {
+				return false
+			}
+		}
+	}
+	return true
+}
 func Verify(c Config, o Observation) error {
 	if !o.Identity.Full() {
 		return errors.New("identity_unknown: 接続主体を確認できません。自動判定を止めます")
 	}
 	i := o.Identity.Value
-	if !strings.EqualFold(i.Host, c.Host) || !strings.EqualFold(i.User, c.User) || (c.SID != "" && c.SID != i.SID) || (c.Machine != "" && (!o.Machine.Full() || o.Machine.Value.Hash != c.Machine)) {
+	if !strings.EqualFold(i.Host, c.Host) || !strings.EqualFold(i.User, c.User) || (c.SID != "" && c.SID != i.SID) || (c.Machine != "" && o.Machine.Full() && o.Machine.Value.Hash != c.Machine) {
 		return &control.RunError{Kind: "ssh_trust", Message: "登録したホスト・ユーザー・SID・machine identityと一致しません。迂回せず対象を照合してください"}
+	}
+	if c.Machine != "" && !o.Machine.Full() {
+		return &control.RunError{Kind: "identity_unknown", Message: "machine identityを取得できません。自動判定を止めます"}
 	}
 	return nil
 }

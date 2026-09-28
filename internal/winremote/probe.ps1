@@ -1,6 +1,8 @@
 param($Request)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+[Console]::Error.WriteLine('CPO_PROBE_STARTED_V1:' + $Request.requestId)
+[Console]::Error.Flush()
 function Unknown($status = 'unavailable') { @{status=$status; completeness='partial'; value=$null} }
 function Observed($value) { @{status='observed'; completeness='full'; value=$value} }
 function Failure($record) {
@@ -77,17 +79,29 @@ try {
     if ($Request.appId -and $result.sessions.status -eq 'observed' -and $result.identity.value.sid -eq $targetSID -and $result.candidates.status -eq 'observed') {
         $exact = @($apps | Where-Object { $_.id -ceq $Request.appId })
         if ($exact.Count -eq 1) {
-            $ids = @($result.sessions.value | ForEach-Object { $_.id })
-            $processes = @(Get-CimInstance Win32_Process)
+            $ids = @($result.sessions.value | ForEach-Object { [int]$_.id } | Select-Object -Unique)
+            $processes = @()
+            if ($ids.Count -gt 0) {
+                $filter = (@($ids | ForEach-Object { "SessionId = $_" }) -join ' OR ')
+                $processes = @(Get-CimInstance Win32_Process -Filter $filter)
+            }
             $found = $null; $complete = $true
             foreach ($p in $processes) {
                 if ($ids -notcontains [int]$p.SessionId) { continue }
                 try {
+                    $aid = [CCProbe]::AppID([int]$p.ProcessId)
+                    if ($aid -cne $Request.appId) { continue }
+                    if (-not $p.CreationDate) { $complete=$false; continue }
                     $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid
                     if ($owner.ReturnValue -ne 0) { $complete=$false; continue }
+                    if (-not $owner.Sid) { $complete=$false; continue }
                     if ($owner.Sid -ne $targetSID) { continue }
-                    $aid = [CCProbe]::AppID([int]$p.ProcessId)
-                    if ($aid -ceq $Request.appId) { $found=@{id=$aid;running=$true;sessionId=[int]$p.SessionId;sid=$targetSID} }
+                    $again = @(Get-CimInstance Win32_Process -Filter ("ProcessId = {0}" -f [int]$p.ProcessId))
+                    if ($again.Count -ne 1 -or -not $again[0].CreationDate -or
+                        $again[0].CreationDate -ne $p.CreationDate -or
+                        [int]$again[0].SessionId -ne [int]$p.SessionId) { $complete=$false; continue }
+                    $found=@{id=$aid;running=$true;sessionId=[int]$p.SessionId;sid=$targetSID}
+                    break
                 } catch { $complete=$false }
             }
             if ($found) { $result.app = Observed $found }

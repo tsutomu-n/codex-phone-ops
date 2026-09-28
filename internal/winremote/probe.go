@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"github.com/tsutomu-n/codex-phone-ops/internal/control"
 	"os/exec"
+	"strings"
 	"time"
 	"unicode/utf16"
 )
@@ -56,6 +57,19 @@ func (b *bounded) Write(p []byte) (int, error) {
 	b.Buffer.Write(p)
 	return n, nil
 }
+func started(stderr, id string) bool {
+	needle := "CPO_PROBE_STARTED_V1:" + id
+	count := 0
+	if !strings.HasSuffix(stderr, "\n") {
+		return false
+	}
+	for _, line := range strings.Split(stderr, "\n") {
+		if strings.TrimSuffix(line, "\r") == needle {
+			count++
+		}
+	}
+	return count == 1
+}
 func Probe(ctx context.Context, c Config, cert bool) (Observation, error) {
 	if e := c.Trust(); e != nil {
 		return Observation{}, e
@@ -73,17 +87,20 @@ func Probe(ctx context.Context, c Config, cert bool) (Observation, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &er
 	e := cmd.Run()
-	o, parseErr := Parse(out.Bytes(), id)
-	runErr := control.ClassifyRun(ctx.Err(), e, er.String(), false, parseErr == nil)
-	if ctx.Err() != nil {
-		return Observation{}, runErr
+	// An explicit host-key failure wins even if a response was printed.
+	if trust := control.ClassifyRun(ctx.Err(), e, er.String(), false, false); trust != nil {
+		if re, ok := trust.(*control.RunError); ok && re.Kind == "ssh_trust" {
+			return Observation{}, trust
+		}
 	}
-	if out.overflow {
+	if out.overflow || er.overflow {
 		return Observation{}, &control.RunError{Kind: "diagnostic_parse", Message: "診断出力が256KiBを超えました"}
 	}
+	o, parseErr := Parse(out.Bytes(), id)
+	runErr := control.ClassifyRun(ctx.Err(), e, er.String(), false, parseErr == nil || started(er.String(), id))
 	if parseErr == nil {
 		return o, runErr
-	} // Preserve valid partial observations even after connection loss.
+	}
 	if runErr != nil {
 		return Observation{}, runErr
 	}

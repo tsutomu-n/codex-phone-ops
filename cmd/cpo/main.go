@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/tsutomu-n/codex-phone-ops/internal/control"
@@ -10,11 +11,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	_ "time/tzdata"
 )
 
 func main() {
 	if e := run(); e != nil {
-		fmt.Fprintln(os.Stderr, "\n", e)
+		var printed *winremote.PrintedError
+		if !errors.As(e, &printed) { fmt.Fprintln(os.Stderr, "\n", e) }
 		os.Exit(1)
 	}
 }
